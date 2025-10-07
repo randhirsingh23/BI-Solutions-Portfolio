@@ -1,11 +1,8 @@
-# Define SSAS instances
-$ssasInstances = @("SSAS01", "SSAS02\\TABULAR")
+$ssasInstances = @("SSAS02\\TABULAR")
 
-# Load AMO assemblies
 [System.Reflection.Assembly]::LoadWithPartialName("Microsoft.AnalysisServices") | Out-Null
 [System.Reflection.Assembly]::LoadWithPartialName("Microsoft.AnalysisServices.Tabular") | Out-Null
 
-# Initialize result list
 $results = @()
 
 foreach ($instance in $ssasInstances) {
@@ -21,29 +18,18 @@ foreach ($instance in $ssasInstances) {
         $attached = @{}
         foreach ($db in $server.Databases) {
             if ($db.Model) {
-                $attached[$db.Name] = @{
-                    ID = $db.ID
-                    CompatibilityLevel = $db.CompatibilityLevel
-                }
+                $attached[$db.Name] = $true
             }
         }
 
-        # Scan cube folders from drive
+        # Scan cube folders
         $dirs = Get-ChildItem -Path $uncPath -Directory -ErrorAction SilentlyContinue
         foreach ($dir in $dirs) {
-            $modelFile = Get-ChildItem -Path $dir.FullName -Recurse -Include "Model.abf" -ErrorAction SilentlyContinue
-            if ($modelFile) {
-                $isAttached = $attached.ContainsKey($dir.Name)
-                $info = if ($isAttached) { $attached[$dir.Name] } else { @{} }
+            if ($dir.Name -match "\.0\.db$") {
+                $cubeName = $dir.Name -replace "\.0\.db$", ""
+                $status = if ($attached.ContainsKey($cubeName)) { "Attached" } else { "Detached" }
 
-                $results += [PSCustomObject]@{
-                    Instance           = $instance
-                    Name               = $dir.Name
-                    ID                 = $info.ID ?? "N/A"
-                    CompatibilityLevel = $info.CompatibilityLevel ?? "Unknown"
-                    Status             = if ($isAttached) { "Attached" } else { "Detached" }
-                    Path               = $dir.FullName
-                }
+                $results += "$instance|$cubeName|$status"
             }
         }
 
@@ -54,6 +40,5 @@ foreach ($instance in $ssasInstances) {
     }
 }
 
-# Export to CSV
-$results | Export-Csv -Path "SSAS_Cube_Audit.csv" -NoTypeInformation -Encoding UTF8
-Write-Host "Audit complete. Saved to SSAS_Cube_Audit.csv"
+$results | Out-File "SSAS_Cube_Status.txt"
+Write-Host "Audit complete. Saved to SSAS_Cube_Status.txt"
