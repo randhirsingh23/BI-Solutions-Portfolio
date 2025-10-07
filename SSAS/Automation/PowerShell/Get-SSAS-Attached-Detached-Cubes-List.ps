@@ -1,5 +1,5 @@
 # Define SSAS instances to scan
-$ssasInstances = @("SSAS02\TABULAR")  # Replace with your actual instance names
+$ssasInstances = @("SSAS02\\TABULAR")  # Replace with your actual instance names
 
 # Load AMO assemblies using partial name (no path drama)
 [System.Reflection.Assembly]::LoadWithPartialName("Microsoft.AnalysisServices") | Out-Null
@@ -66,4 +66,4 @@ foreach ($instance in $ssasInstances) {
 $csvPath = "SSAS_Tabular_Model_Audit.csv"
 $allModels | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8
 
-Write-Host "`n✅ Audit complete. Results saved to: $csvPath"
+Write-Host "Audit complete. Results saved to: $csvPath"
