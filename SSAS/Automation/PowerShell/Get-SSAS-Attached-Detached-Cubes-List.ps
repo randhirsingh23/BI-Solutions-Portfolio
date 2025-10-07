@@ -25,11 +25,14 @@ foreach ($instance in $ssasInstances) {
         # Scan cube folders
         $dirs = Get-ChildItem -Path $uncPath -Directory -ErrorAction SilentlyContinue
         foreach ($dir in $dirs) {
-            if ($dir.Name -match "\.0\.db$") {
-                $cubeName = $dir.Name -replace "\.0\.db$", ""
+            if ($dir.Name -match ".db$") {
+                $cubeName = $dir.Name.Split(".")[0]
                 $status = if ($attached.ContainsKey($cubeName)) { "Attached" } else { "Detached" }
 
-                $results += "$instance|$cubeName|$status"
+            $results += [PSCustomObject]@{
+            Instance = $instance
+            CubeName = $cubeName
+            Status   = $status
             }
         }
 
