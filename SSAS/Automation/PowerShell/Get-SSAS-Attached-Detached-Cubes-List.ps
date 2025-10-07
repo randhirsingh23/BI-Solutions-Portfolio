@@ -1,0 +1,63 @@
+# Load AMO assemblies
+Add-Type -AssemblyName "Microsoft.AnalysisServices"
+Add-Type -AssemblyName "Microsoft.AnalysisServices.Tabular"
+
+# Define SSAS instances to scan
+$ssasInstances = @("localhost", "SSAS01", "SSAS02\TABULAR")  # Replace with your actual instance names
+
+# Initialize result list
+$allModels = @()
+
+foreach ($instance in $ssasInstances) {
+    try {
+        # Connect to SSAS instance
+        $server = New-Object Microsoft.AnalysisServices.Server
+        $server.Connect($instance)
+
+        # Get attached models
+        foreach ($db in $server.Databases) {
+            if ($db.Model) {
+                $allModels += [PSCustomObject]@{
+                    Instance           = $instance
+                    Name               = $db.Name
+                    ID                 = $db.ID
+                    CompatibilityLevel = $db.CompatibilityLevel
+                    Status             = "Attached"
+                    Path               = "N/A"
+                }
+            }
+        }
+
+        # Get detached models
+        $dataDir = $server.ServerProperties["DataDir"].Value
+        $dirs = Get-ChildItem -Path $dataDir -Directory
+
+        foreach ($dir in $dirs) {
+            $modelFile = Get-ChildItem -Path $dir.FullName -Recurse -Include "Model.abf" -ErrorAction SilentlyContinue
+            if ($modelFile) {
+                $alreadyListed = $allModels | Where-Object { $_.Name -eq $dir.Name -and $_.Instance -eq $instance }
+                if (-not $alreadyListed) {
+                    $allModels += [PSCustomObject]@{
+                        Instance           = $instance
+                        Name               = $dir.Name
+                        ID                 = "N/A"
+                        CompatibilityLevel = "Unknown"
+                        Status             = "Detached"
+                        Path               = $dir.FullName
+                    }
+                }
+            }
+        }
+
+        $server.Disconnect()
+    }
+    catch {
+        Write-Warning "Failed to connect to instance: $instance. Error: $_"
+    }
+}
+
+# Export to CSV
+$csvPath = "SSAS_Tabular_Model_Audit.csv"
+$allModels | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8
+
+Write-Host "Audit complete. Results saved to: $csvPath"
