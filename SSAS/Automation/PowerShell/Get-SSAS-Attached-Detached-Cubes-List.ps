@@ -1,20 +1,23 @@
-# Load AMO assemblies
-Add-Type -AssemblyName "Microsoft.AnalysisServices"
-Add-Type -AssemblyName "Microsoft.AnalysisServices.Tabular"
-
 # Define SSAS instances to scan
-$ssasInstances = @("localhost", "SSAS01", "SSAS02\TABULAR")  # Replace with your actual instance names
+$ssasInstances = @("SSAS02\TABULAR")  # Replace with your actual instance names
+
+# Load AMO assemblies using partial name (no path drama)
+[System.Reflection.Assembly]::LoadWithPartialName("Microsoft.AnalysisServices") | Out-Null
+[System.Reflection.Assembly]::LoadWithPartialName("Microsoft.AnalysisServices.Tabular") | Out-Null
 
 # Initialize result list
 $allModels = @()
 
 foreach ($instance in $ssasInstances) {
     try {
-        # Connect to SSAS instance
+        Write-Host "Connecting to instance: $instance"
         $server = New-Object Microsoft.AnalysisServices.Server
         $server.Connect($instance)
 
-        # Get attached models
+        # Extract server name for UNC path
+        $serverName = ($instance -split "\\")[0]
+
+        # Get attached Tabular models
         foreach ($db in $server.Databases) {
             if ($db.Model) {
                 $allModels += [PSCustomObject]@{
@@ -28,9 +31,12 @@ foreach ($instance in $ssasInstances) {
             }
         }
 
-        # Get detached models
-        $dataDir = $server.ServerProperties["DataDir"].Value
-        $dirs = Get-ChildItem -Path $dataDir -Directory
+        # Get detached models via UNC path
+        $localPath = $server.ServerProperties["DataDir"].Value
+        $uncPath = "\\$serverName\" + ($localPath -replace ":", "$")
+
+        Write-Host "Scanning UNC path: $uncPath"
+        $dirs = Get-ChildItem -Path $uncPath -Directory -ErrorAction SilentlyContinue
 
         foreach ($dir in $dirs) {
             $modelFile = Get-ChildItem -Path $dir.FullName -Recurse -Include "Model.abf" -ErrorAction SilentlyContinue
@@ -52,7 +58,7 @@ foreach ($instance in $ssasInstances) {
         $server.Disconnect()
     }
     catch {
-        Write-Warning "Failed to connect to instance: $instance. Error: $_"
+        Write-Warning "Failed to connect to $instance. Error: $_"
     }
 }
 
@@ -60,4 +66,4 @@ foreach ($instance in $ssasInstances) {
 $csvPath = "SSAS_Tabular_Model_Audit.csv"
 $allModels | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8
 
-Write-Host "Audit complete. Results saved to: $csvPath"
+Write-Host "`n✅ Audit complete. Results saved to: $csvPath"
