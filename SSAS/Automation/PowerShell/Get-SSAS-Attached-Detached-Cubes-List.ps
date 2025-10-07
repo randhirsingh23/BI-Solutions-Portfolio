@@ -1,5 +1,5 @@
 # Define SSAS instances
-$ssasInstances = @("SSAS01", "SSAS02\TABULAR")
+$ssasInstances = @("SSAS01", "SSAS02\\TABULAR")
 
 # Load AMO assemblies
 [System.Reflection.Assembly]::LoadWithPartialName("Microsoft.AnalysisServices") | Out-Null
@@ -50,16 +50,10 @@ foreach ($instance in $ssasInstances) {
         $server.Disconnect()
     }
     catch {
-        Write-Warning "⚠️ $instance failed: $_"
+        Write-Warning "$instance failed: $_"
     }
 }
 
 # Export to CSV
 $results | Export-Csv -Path "SSAS_Cube_Audit.csv" -NoTypeInformation -Encoding UTF8
-Write-Host "`n✅ Audit complete. Saved to SSAS_Cube_Audit.csv"
-
-# Export to CSV
-$csvPath = "SSAS_Tabular_Model_Audit.csv"
-$allModels | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8
-
-Write-Host "Audit complete. Results saved to: $csvPath"
+Write-Host "Audit complete. Saved to SSAS_Cube_Audit.csv"
