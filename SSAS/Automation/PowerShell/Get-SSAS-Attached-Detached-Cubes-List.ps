@@ -1,56 +1,48 @@
-# Define SSAS instances to scan
-$ssasInstances = @("SSAS02\\TABULAR")  # Replace with your actual instance names
+# Define SSAS instances
+$ssasInstances = @("SSAS01", "SSAS02\TABULAR")
 
-# Load AMO assemblies using partial name (no path drama)
+# Load AMO assemblies
 [System.Reflection.Assembly]::LoadWithPartialName("Microsoft.AnalysisServices") | Out-Null
 [System.Reflection.Assembly]::LoadWithPartialName("Microsoft.AnalysisServices.Tabular") | Out-Null
 
 # Initialize result list
-$allModels = @()
+$results = @()
 
 foreach ($instance in $ssasInstances) {
     try {
-        Write-Host "Connecting to instance: $instance"
         $server = New-Object Microsoft.AnalysisServices.Server
         $server.Connect($instance)
 
-        # Extract server name for UNC path
         $serverName = ($instance -split "\\")[0]
+        $dataDir = $server.ServerProperties["DataDir"].Value
+        $uncPath = "\\$serverName\" + ($dataDir -replace ":", "$")
 
-        # Get attached Tabular models
+        # Get attached model names
+        $attached = @{}
         foreach ($db in $server.Databases) {
             if ($db.Model) {
-                $allModels += [PSCustomObject]@{
-                    Instance           = $instance
-                    Name               = $db.Name
-                    ID                 = $db.ID
+                $attached[$db.Name] = @{
+                    ID = $db.ID
                     CompatibilityLevel = $db.CompatibilityLevel
-                    Status             = "Attached"
-                    Path               = "N/A"
                 }
             }
         }
 
-        # Get detached models via UNC path
-        $localPath = $server.ServerProperties["DataDir"].Value
-        $uncPath = "\\$serverName\" + ($localPath -replace ":", "$")
-
-        Write-Host "Scanning UNC path: $uncPath"
+        # Scan cube folders from drive
         $dirs = Get-ChildItem -Path $uncPath -Directory -ErrorAction SilentlyContinue
-
         foreach ($dir in $dirs) {
             $modelFile = Get-ChildItem -Path $dir.FullName -Recurse -Include "Model.abf" -ErrorAction SilentlyContinue
             if ($modelFile) {
-                $alreadyListed = $allModels | Where-Object { $_.Name -eq $dir.Name -and $_.Instance -eq $instance }
-                if (-not $alreadyListed) {
-                    $allModels += [PSCustomObject]@{
-                        Instance           = $instance
-                        Name               = $dir.Name
-                        ID                 = "N/A"
-                        CompatibilityLevel = "Unknown"
-                        Status             = "Detached"
-                        Path               = $dir.FullName
-                    }
+                $isAttached = $attached.ContainsKey($dir.Name)
+                $info = if ($isAttached) { $attached[$dir.Name] } else { @{} }
+
+                $results += [PSCustomObject]@{
+                    Instance           = $instance
+                    Name               = $dir.Name
+                    ID                 = $info.ID ?? "N/A"
+                    CompatibilityLevel = $info.CompatibilityLevel ?? "Unknown"
+                    Status             = if ($isAttached) { "Attached" } else { "Detached" }
+                    Path               = $dir.FullName
                 }
             }
         }
@@ -58,9 +50,13 @@ foreach ($instance in $ssasInstances) {
         $server.Disconnect()
     }
     catch {
-        Write-Warning "Failed to connect to $instance. Error: $_"
+        Write-Warning "⚠️ $instance failed: $_"
     }
 }
+
+# Export to CSV
+$results | Export-Csv -Path "SSAS_Cube_Audit.csv" -NoTypeInformation -Encoding UTF8
+Write-Host "`n✅ Audit complete. Saved to SSAS_Cube_Audit.csv"
 
 # Export to CSV
 $csvPath = "SSAS_Tabular_Model_Audit.csv"
