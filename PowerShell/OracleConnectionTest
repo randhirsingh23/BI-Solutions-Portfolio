@@ -1,0 +1,10 @@
+# Test each component separately
+$hostname = "your-oracle-host"
+$port = "1521"
+$service_name = "your_service_name"
+
+# Test network connectivity
+Test-NetConnection -ComputerName $hostname -Port $port
+
+# Test with tnsping if available (even without TNS)
+tnsping "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=$hostname)(PORT=$port))(CONNECT_DATA=(SERVICE_NAME=$service_name)))"
