@@ -8,3 +8,16 @@ Test-NetConnection -ComputerName $hostname -Port $port
 
 # Test with tnsping if available (even without TNS)
 tnsping "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=$hostname)(PORT=$port))(CONNECT_DATA=(SERVICE_NAME=$service_name)))"
+
+
+# How to Test Oracle Connection Without Oracle Client
+$connectionString = "Driver={Oracle in OraClient12Home1};Dbq=your_host:your_port/your_service;Uid=your_user;Pwd=your_password;"
+$conn = New-Object System.Data.Odbc.OdbcConnection($connectionString)
+
+try {
+    $conn.Open()
+    Write-Host "ODBC connection successful!"
+    $conn.Close()
+} catch {
+    Write-Host "Connection failed: $($_.Exception.Message)"
+}
